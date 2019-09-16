@@ -140,26 +140,24 @@ impl<T: Trait> Module<T> {
         to: T::AccountId,
         value: T::TokenBalance,
     ) -> Result {
-        ensure!(
-            <BalanceOf<T>>::exists((token_id, from.clone())),
-            "Account does not own this token"
-        );
-        let sender_balance = Self::balance_of((token_id, from.clone()));
-        ensure!(sender_balance >= value, "Not enough balance.");
-
-        let updated_from_balance = sender_balance
-            .checked_sub(&value)
-            .ok_or("overflow in calculating balance")?;
-        let receiver_balance = Self::balance_of((token_id, to.clone()));
-        let updated_to_balance = receiver_balance
-            .checked_add(&value)
-            .ok_or("overflow in calculating balance")?;
-
         // reduce sender's balance
-        <BalanceOf<T>>::insert((token_id, from.clone()), updated_from_balance);
+        <BalanceOf<T>>::insert(
+            (token_id, from.clone()),
+            Self::balance_of((token_id, from.clone()))
+                .checked_sub(&value)
+                .ok_or("Not enough balance.")?,
+        );
 
         // increase receiver's balance
-        <BalanceOf<T>>::insert((token_id, to.clone()), updated_to_balance);
+        <BalanceOf<T>>::insert(
+            (token_id, to.clone()),
+            Self::balance_of((token_id, to.clone()))
+                .checked_add(&value)
+                .expect(
+                    "Resultant balance was greater than u128::max_value(). This represents a \
+                     catostrophic error.",
+                ),
+        );
 
         Self::deposit_event(RawEvent::Transfer(token_id, from, to, value));
         Ok(())
