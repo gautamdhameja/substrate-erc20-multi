@@ -165,3 +165,226 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use primitives::{Blake2Hasher, H256};
+    use runtime_io::with_externalities;
+    use sr_primitives::weights::Weight;
+    use sr_primitives::Perbill;
+    use sr_primitives::{
+        testing::Header,
+        traits::{BlakeTwo256, IdentityLookup},
+    };
+    use support::{impl_outer_origin, parameter_types};
+
+    impl_outer_origin! {
+        pub enum Origin for Test {}
+    }
+
+    // For testing the module, we construct most of a mock runtime. This means
+    // first constructing a configuration type (`Test`) which `impl`s each of the
+    // configuration traits of modules we want to use.
+    #[derive(Clone, Eq, PartialEq)]
+    pub struct Test;
+    parameter_types! {
+        pub const BlockHashCount: u64 = 250;
+        pub const MaximumBlockWeight: Weight = 1024;
+        pub const MaximumBlockLength: u32 = 2 * 1024;
+        pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+    }
+    impl system::Trait for Test {
+        type Origin = Origin;
+        type Call = ();
+        type Index = u64;
+        type BlockNumber = u64;
+        type Hash = H256;
+        type Hashing = BlakeTwo256;
+        type AccountId = u64;
+        type Lookup = IdentityLookup<Self::AccountId>;
+        type Header = Header;
+        type WeightMultiplierUpdate = ();
+        type Event = ();
+        type BlockHashCount = BlockHashCount;
+        type MaximumBlockWeight = MaximumBlockWeight;
+        type MaximumBlockLength = MaximumBlockLength;
+        type AvailableBlockRatio = AvailableBlockRatio;
+        type Version = ();
+    }
+    impl Trait for Test {
+        type Event = ();
+        type TokenBalance = u128;
+    }
+    type TemplateModule = Module<Test>;
+
+    /// test accounts
+    const A: u64 = 0;
+    const B: u64 = 1;
+    const C: u64 = 2;
+
+    // This function basically just builds a genesis storage key/value store according to
+    // our desired mockup.
+    fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+        system::GenesisConfig::default()
+            .build_storage::<Test>()
+            .unwrap()
+            .into()
+    }
+
+    /// send tokens from A to B
+    #[test]
+    fn xfer() {
+        with_externalities(&mut new_test_ext(), || {
+            // create a new token as A
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+
+            // transfer to B
+            TemplateModule::transfer(Origin::signed(A), 0, B, 4).unwrap();
+
+            // A has 6
+            assert_eq!(TemplateModule::balance_of((0, A)), 6);
+
+            // B has 4
+            assert_eq!(TemplateModule::balance_of((0, B)), 4);
+        });
+    }
+
+    #[test]
+    fn init() {
+        with_externalities(&mut new_test_ext(), || {
+            assert_eq!(TemplateModule::balance_of((0, A)), 0);
+            assert_eq!(TemplateModule::balance_of((1, A)), 0);
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+            assert_eq!(TemplateModule::balance_of((1, A)), 0);
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+            assert_eq!(TemplateModule::balance_of((1, A)), 10);
+        });
+    }
+
+    #[test]
+    fn transfer_pong() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+            assert_eq!(TemplateModule::balance_of((0, B)), 0);
+            TemplateModule::transfer(Origin::signed(A), 0, B, 1).unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 9);
+            assert_eq!(TemplateModule::balance_of((0, B)), 1);
+            TemplateModule::transfer(Origin::signed(B), 0, A, 1).unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+            assert_eq!(TemplateModule::balance_of((0, B)), 0);
+            TemplateModule::transfer(Origin::signed(A), 0, B, 1).unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 9);
+            assert_eq!(TemplateModule::balance_of((0, B)), 1);
+            TemplateModule::transfer(Origin::signed(B), 0, A, 1).unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+            assert_eq!(TemplateModule::balance_of((0, B)), 0);
+        });
+    }
+
+    #[test]
+    fn transfer_before_create() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::transfer(Origin::signed(A), 0, B, 1).unwrap_err();
+            TemplateModule::transfer(Origin::signed(B), 0, A, 1).unwrap_err();
+            TemplateModule::transfer(Origin::signed(A), 1, B, 1).unwrap_err();
+        });
+    }
+
+    #[test]
+    fn transfer_none() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, B, 0).unwrap();
+        });
+    }
+
+    #[test]
+    fn transfer_twice() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, B, 5).unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, B, 5).unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, B, 5).unwrap_err();
+        });
+    }
+
+    #[test]
+    fn transfer_overflow() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::init(
+                Origin::signed(A),
+                b"Trash".to_vec(),
+                b"TRS".to_vec(),
+                u128::max_value(),
+            )
+            .unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, B, u128::max_value()).unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 0);
+            assert_eq!(TemplateModule::balance_of((0, B)), u128::max_value());
+        });
+    }
+
+    #[test]
+    fn transfer_too_much() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, B, 11).unwrap_err();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+            assert_eq!(TemplateModule::balance_of((0, B)), 0);
+        });
+    }
+
+    #[test]
+    fn transfer_to_self() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, A, 10).unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+        });
+    }
+
+    #[test]
+    fn transfer_too_much_to_self() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, A, 11).unwrap_err();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+        });
+    }
+
+    #[test]
+    fn transfer_zero_to_self() {
+        with_externalities(&mut new_test_ext(), || {
+            TemplateModule::init(Origin::signed(A), b"Trash".to_vec(), b"TRS".to_vec(), 10)
+                .unwrap();
+            TemplateModule::transfer(Origin::signed(A), 0, A, 0).unwrap();
+            assert_eq!(TemplateModule::balance_of((0, A)), 10);
+        });
+    }
+
+    #[test]
+    fn default_balance_zero() {
+        with_externalities(&mut new_test_ext(), || {
+            assert_eq!(TemplateModule::balance_of((0, A)), 0);
+            assert_eq!(TemplateModule::balance_of((0, B)), 0);
+            assert_eq!(TemplateModule::balance_of((0, C)), 0);
+            assert_eq!(TemplateModule::balance_of((1, A)), 0);
+            assert_eq!(TemplateModule::balance_of((1, B)), 0);
+            assert_eq!(TemplateModule::balance_of((1, C)), 0);
+        });
+    }
+}
