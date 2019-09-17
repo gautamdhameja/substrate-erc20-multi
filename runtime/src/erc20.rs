@@ -154,8 +154,8 @@ impl<T: Trait> Module<T> {
             Self::balance_of((token_id, to.clone()))
                 .checked_add(&value)
                 .expect(
-                    "Resultant balance was greater than u128::max_value(). This represents a \
-                     catostrophic error.",
+                    "Resultant balance was greater than max value for TokenBalance. This \
+                     represents a catostrophic error.",
                 ),
         );
 
