@@ -1,5 +1,7 @@
 # Substrate ERC20 Multi
 
+**Archived** - This repository is no longer up-to-date or maintained. Please refer to the [FRAME Balances pallet](https://crates.parity.io/pallet_balances/index.html).
+
 A Parity Substrate SRML module for multiple ERC20 tokens. Any number of tokens can be initialized and managed using this module.
 
 This module is based on/inspired by the [SRML Assets module](https://github.com/paritytech/substrate/tree/master/srml/assets) but is implemented in a ERC20 flavour.
