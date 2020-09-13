@@ -1,14 +1,17 @@
+use codec::{Codec, Decode, Encode};
 use rstd::prelude::*;
-use parity_codec::Codec;
-use support::{dispatch::Result, Parameter, StorageMap, StorageValue, decl_storage, decl_module, decl_event, ensure};
-use runtime_primitives::traits::{CheckedSub, CheckedAdd, Member, SimpleArithmetic, As};
+use sr_primitives::traits::{CheckedAdd, CheckedSub, Member, SimpleArithmetic};
+use support::{
+    decl_event, decl_module, decl_storage, dispatch::Result, ensure, Parameter, StorageMap,
+    StorageValue,
+};
 use system::{self, ensure_signed};
 
 // the module trait
 // contains type definitions
 pub trait Trait: system::Trait {
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-    type TokenBalance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64>;
+    type TokenBalance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy;
 }
 
 // struct to store the token details
@@ -23,7 +26,7 @@ pub struct Erc20Token<U> {
 decl_module! {
   pub struct Module<T: Trait> for enum Call where origin: T::Origin {
       // initialize the default event for this module
-      fn deposit_event<T>() = default;
+      pub fn deposit_event() = default;
 
       // initializes a new token
       // generates an integer token_id so that all tokens are unique
@@ -40,7 +43,7 @@ decl_module! {
 
           let token_id = Self::token_id();
           let next_token_id = token_id.checked_add(1).ok_or("overflow in calculating next token id")?;
-          <TokenId<T>>::put(next_token_id);
+          <TokenId>::put(next_token_id);
 
           let token = Erc20Token {
               name,
@@ -83,7 +86,7 @@ decl_module! {
         ensure!(<Allowance<T>>::exists((token_id, from.clone(), to.clone())), "Allowance does not exist.");
         let allowance = Self::allowance((token_id, from.clone(), to.clone()));
         ensure!(allowance >= value, "Not enough allowance.");
-          
+
         // using checked_sub (safe math) to avoid overflow
         let updated_allowance = allowance.checked_sub(&value).ok_or("overflow in calculating allowance")?;
         <Allowance<T>>::insert((token_id, from.clone(), to.clone()), updated_allowance);
@@ -111,7 +114,11 @@ decl_storage! {
 
 // events
 decl_event!(
-    pub enum Event<T> where AccountId = <T as system::Trait>::AccountId, Balance = <T as self::Trait>::TokenBalance {
+    pub enum Event<T>
+    where
+        AccountId = <T as system::Trait>::AccountId,
+        Balance = <T as self::Trait>::TokenBalance,
+    {
         // event for transfer of tokens
         // tokenid, from, to, value
         Transfer(u32, AccountId, AccountId, Balance),
@@ -133,14 +140,21 @@ impl<T: Trait> Module<T> {
         to: T::AccountId,
         value: T::TokenBalance,
     ) -> Result {
-        ensure!(<BalanceOf<T>>::exists((token_id, from.clone())), "Account does not own this token");
+        ensure!(
+            <BalanceOf<T>>::exists((token_id, from.clone())),
+            "Account does not own this token"
+        );
         let sender_balance = Self::balance_of((token_id, from.clone()));
         ensure!(sender_balance >= value, "Not enough balance.");
 
-        let updated_from_balance = sender_balance.checked_sub(&value).ok_or("overflow in calculating balance")?;
+        let updated_from_balance = sender_balance
+            .checked_sub(&value)
+            .ok_or("overflow in calculating balance")?;
         let receiver_balance = Self::balance_of((token_id, to.clone()));
-        let updated_to_balance = receiver_balance.checked_add(&value).ok_or("overflow in calculating balance")?;
-        
+        let updated_to_balance = receiver_balance
+            .checked_add(&value)
+            .ok_or("overflow in calculating balance")?;
+
         // reduce sender's balance
         <BalanceOf<T>>::insert((token_id, from.clone()), updated_from_balance);
 
